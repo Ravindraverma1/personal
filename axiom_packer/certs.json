@@ -1,0 +1,37 @@
+{
+    "variables": {
+        "pwd": "{{env `PWD`}}"
+    },
+    "builders": [
+        {
+            "type": "docker",
+            "image": "centos",
+            "discard": true,
+            "run_command": [
+                "-d",
+                "-v",
+                "{{ user `pwd` }}/ssl:/etc/my_pki",
+                "-i",
+                "-t",
+                "{{.Image}}",
+                "/bin/bash"
+            ]
+        }
+    ],
+    "provisioners": [
+        {
+            "inline": [
+                "yum install -y python-setuptools",
+                "easy_install pip",
+                "pip install --upgrade pip",
+                "pip install ansible==2.7.0",
+                "pip install pyOpenSSL"
+            ],
+            "type": "shell"
+        },
+        {
+            "type": "ansible-local",
+            "playbook_file": "certs.yaml"
+        }
+    ]
+}

@@ -1,0 +1,18 @@
+{
+  "cv_rds" : {
+        "postgres" : [
+          {
+            "curr_version"           : "9.6.3",
+            "new_version"            : "10.6",
+            "upgrade_supported"      : "true"
+          }
+        ],
+        "oracle-se2" : [
+          {
+            "curr_version"           : "12.1.0.2.v12",
+            "new_version"            : "19.0.0.0.ru-2019-10.rur-2019-10.r1",
+            "upgrade_supported"      : "true"
+          }
+      ]
+    }
+}

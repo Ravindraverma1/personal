@@ -1,0 +1,70 @@
+{
+    "variables": {
+        "release": "",
+        "iam_instance_profile": "",
+        "profile": "",
+        "region": "",
+        "ebs_encyption_key_arn": "",
+        "built_by": "Jenkins on SST"
+    },
+    "builders": [
+        {
+            "type": "amazon-ebsvolume",
+            "iam_instance_profile": "{{user `iam_instance_profile`}}",
+            "availability_zone": "{{user `region`}}b",
+            "region": "{{user `region`}}",
+            "profile": "{{user `profile`}}",
+            "source_ami_filter": {
+                "filters": {
+                    "virtualization-type": "hvm",
+                    "name": "packer-axiom-tomcat-{{ user `release` }}",
+                    "root-device-type": "ebs"
+                },
+                "most_recent": true,
+                "owners": "{{ user `ami_owner` }}"
+            },
+            "instance_type": "t2.micro",
+            "ssh_username": "ec2-user",
+            "security_group_id": "{{user `packer_sg_id`}}",
+            "ebs_volumes": [
+                {
+                    "volume_type": "gp3",
+                    "device_name": "/dev/sdh",
+                    "delete_on_termination": false,
+                    "encrypted": true,
+                    "kms_key_id": "{{user `ebs_encyption_key_arn`}}",
+                    "tags": {
+                        "Name": "axiom-tomcat-volume-{{user `release`}}",
+                        "Built_By": "{{ user `built_by` }}",
+                        "Release": "{{ user `release` }}"
+                    },
+                    "volume_size": 10
+                }
+            ]
+        }
+    ],
+    "provisioners": [
+        {
+            "inline": [
+                "sudo pip install ansible==2.7.0"
+            ],
+            "type": "shell"
+        },
+        {
+            "type": "ansible-local",
+            "playbook_file": "tomcat-playbook.yaml",
+            "extra_arguments": [
+                "--extra-vars \"jdk_version={{ user `jdk_version` }} cv_version={{user `cv_version`}} \""
+            ]
+        }
+    ],
+
+    "post-processors": [
+       {
+         "type": "manifest",
+         "output": "packer-manifest.json",
+         "strip_path": true
+       }
+     ]
+
+}

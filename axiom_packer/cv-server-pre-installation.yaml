@@ -1,0 +1,25 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    CV_SERVER: server_v_{{ cv_version }}.tar.gz
+  tasks:
+   ######## CV pre- installation
+  - name: Create working directory for CV extract
+    file:
+        path: /tmp/server_v_{{ cv_version }}
+        state: directory
+        remote_src: yes
+
+  - name: Extract CV installation archive to /tmp
+    unarchive:
+        src: /root/install/server_v_{{ cv_version }}.tar.gz
+        dest: /tmp/server_v_{{ cv_version }}
+        remote_src: yes
+
+  - name: Link exportimport to PATH (AMI level linking)
+    file:
+        src: /tmp/server_v_{{ cv_version }}/server-bin/bin/exportimport.sh
+        dest: /usr/bin/exportimport.sh
+        state: link
+        remote_src: yes

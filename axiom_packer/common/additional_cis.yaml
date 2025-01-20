@@ -1,0 +1,282 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  tasks:
+# 3.5.2.1 Ensure default deny firewall policy
+    - name: 3.5.2.1 - Ensure IPv6 default deny firewall policy
+      iptables:
+        ip_version: ipv6
+        chain: "{{item}}"
+        policy: DROP
+      with_items:
+        - INPUT
+        - FORWARD
+        - OUTPUT
+      tags:
+        - level-1
+        - section-3
+        - section-3.5
+        - section-3.5.2
+        - section-3.5.2.1
+        - "3.5.2.1"
+        - scored
+
+    # 3.5.2.2 Ensure loopback traffic is configured
+    - name: 3.5.2.2 - Ensure IPv6 loopback traffic is configured
+      iptables:
+        ip_version: ipv6
+        chain: INPUT
+        in_interface: "lo"
+        jump: ACCEPT
+      tags:
+        - level-1
+        - section-3
+        - section-3.5
+        - section-3.5.2
+        - section-3.5.2.2
+        - "3.5.2.2"
+        - scored
+
+    - name: 3.5.2.2 - Ensure IPv6 loopback traffic is configured(-o lo)
+      iptables:
+        ip_version: ipv6
+        chain: OUTPUT
+        out_interface: "lo"
+        jump: ACCEPT
+      tags:
+        - level-1
+        - section-3
+        - section-3.5
+        - section-3.5.2
+        - section-3.5.2.2
+        - "3.5.2.2"
+        - scored
+
+    - name: 3.5.2.2 - Ensure IPv6 loopback traffic is configured(-i ::1)
+      iptables:
+        ip_version: ipv6
+        chain: INPUT
+        source: "::1"
+        jump: DROP
+      tags:
+        - level-1
+        - section-3
+        - section-3.5
+        - section-3.5.2
+        - section-3.5.2.2
+        - "3.5.2.2"
+        - scored
+
+    # 5.3.2 Ensure lockout for failed password attempts is configured
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_faillock.so - before)
+      pamd:
+        name: system-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_type: auth
+        new_control: required
+        new_module_path: pam_faillock.so
+        module_arguments: 'preauth
+            audit
+            silent
+            deny=5
+            unlock_time=900'
+        state: before
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_faillock.so - last)
+      pamd:
+        name: system-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_type: auth
+        new_control: sufficient
+        new_module_path: pam_faillock.so
+        module_arguments: 'authsucc
+            audit
+            deny=5
+            unlock_time=900'
+        state: after
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_faillock.so - after)
+      pamd:
+        name: system-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_type: auth
+        new_control: "[default=die]"
+        new_module_path: pam_faillock.so
+        module_arguments: 'authfail
+            audit
+            deny=5
+            unlock_time=900'
+        state: after
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_unix.so)
+      pamd:
+        name: system-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_control: '[success=1 default=bad]'
+        module_arguments: ''
+        state: updated
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_faillock.so - before)
+      pamd:
+        name: password-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_type: auth
+        new_control: required
+        new_module_path: pam_faillock.so
+        module_arguments: 'preauth
+            audit
+            silent
+            deny=5
+            unlock_time=900'
+        state: before
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_faillock.so - last)
+      pamd:
+        name: password-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_type: auth
+        new_control: sufficient
+        new_module_path: pam_faillock.so
+        module_arguments: 'authsucc
+            audit
+            deny=5
+            unlock_time=900'
+        state: after
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_faillock.so - after)
+      pamd:
+        name: password-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_type: auth
+        new_control: "[default=die]"
+        new_module_path: pam_faillock.so
+        module_arguments: 'authfail
+            audit
+            deny=5
+            unlock_time=900'
+        state: after
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    - name: 5.3.2 - Ensure lockout for failed password attempts is configured(pam_unix.so)
+      pamd:
+        name: password-auth
+        type: auth
+        control: sufficient
+        module_path: pam_unix.so
+        new_control: '[success=1 default=bad]'
+        module_arguments: ''
+        state: updated
+      tags:
+        - level-1
+        - section-5
+        - section-5.3
+        - section-5.3.2
+        - "5.3.2"
+        - scored
+
+    # 5.4.2 Ensure system accounts are non-login
+    - name: 5.4.2 - Retrieve system accounts
+      shell: "awk -F: '($3 < 500) {print $1 }' /etc/passwd | grep -v ^#"
+      register: audit
+      check_mode: false
+      changed_when: false
+      tags:
+        - level-1
+        - section-5
+        - section-5.4
+        - section-5.4.2
+        - "5.4.2"
+        - scored
+
+    - name: 5.4.2 - Lock system user passwords
+      command: "usermod -L {{ item }}"
+      with_items: "{{ audit.stdout_lines }}"
+      when: item != "root" or item != "axcloudops"
+      tags:
+        - level-1
+        - section-5
+        - section-5.4
+        - section-5.4.2
+        - "5.4.2"
+        - scored
+        - non-idempotent
+
+    - name: 5.4.2 - Ensure system accounts are non-login
+      user:
+        name: "{{ item }}"
+        shell: "/sbin/nologin"
+      with_items: "{{ audit.stdout_lines }}"
+      when: item != "root" and item != "axcloudops"
+      tags:
+        - level-1
+        - section-5
+        - section-5.4
+        - section-5.4.2
+        - "5.4.2"
+        - scored
+
+    # 4.2.4 Ensure permissions on all logfiles are configured
+    - name: Fix logfiles permissions cis 4.2.4
+      shell: "find /var/log -type f -exec chmod g-wx,o-rwx {} +"

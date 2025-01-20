@@ -1,0 +1,245 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    dd_id: "{{ dd_id }}"
+    # No need to update for 10.3 onward. Delete CV_S3TOOLS_MAP var once all envs are >= 10.3.
+    CV_S3TOOLS_MAP:
+      - cv_ver: 10_1_1_2020-04-30
+        s3tools_ver: 1_1_2020-05-08
+        s3tools_subver: 1.1
+      - cv_ver: 10_2_0_2020-06-22
+        s3tools_ver: 1_1_2020-05-08
+        s3tools_subver: 1.1
+      - cv_ver: 10_2_1_2020-07-28
+        s3tools_ver: 1_1_2020-05-08
+        s3tools_subver: 1.1
+
+  tasks:
+    ########## Packages and upgrades
+    - name: install filebeat GPG key
+      rpm_key:
+        key: https://packages.elastic.co/GPG-KEY-elasticsearch
+        state: present
+
+    - name: install elastic repo
+      yum_repository:
+        name: elastic-8.x
+        description: Elastic repository for 8.x packages
+        baseurl: https://artifacts.elastic.co/packages/8.x/yum
+        state: present
+
+    - name: Add Logstash repository.
+      copy:
+          src: /tmp/logstash.repo
+          dest: /etc/yum.repos.d/logstash.repo
+          owner: root
+          group: root
+          mode: 644
+
+    - name: Install Logstash.
+      yum:
+        name: "logstash-8.{{ logstash_minor_ver }}"
+        state: present
+        update_cache: true
+
+    - name: Create Logstash configuration files.
+      copy:
+          src: /tmp/01-logstash.conf
+          dest: /etc/logstash/conf.d/01-logstash.conf
+          owner: root
+          group: root
+          mode: 644
+
+    - name: Overwrite Logstash yaml files.
+      copy:
+          src: /tmp/logstash.yml
+          dest: /etc/logstash/logstash.yml
+          owner: root
+          group: root
+          mode: 644
+
+    - name: Changes logstash binary permission
+      file:
+          dest: /usr/share/logstash
+          owner: logstash
+          group: logstash
+          recurse: yes
+          mode: u=rwX,g=rX,o=rX
+
+    - name: install datadog agent
+      environment:
+          DD_API_KEY: "{{ dd_id }}"
+          DD_INSTALL_ONLY: "true"
+          DD_SITE: "datadoghq.com"
+          DD_AGENT_MAJOR_VERSION: "7"
+      shell: bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh )"
+
+    - name: remove ntp-client
+      yum:
+        name: ntp*
+        state: absent
+
+    - name: install epel7
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+
+    - name: Download snowcd
+      shell: bash -c "$(wget --recursive --no-parent --no-directories -P /etc/snowflake/ -A "snowcd-*.gz" https://sfc-repo.snowflakecomputing.com/snowcd/linux/latest/index.html)"
+
+    - name: Find snowcd gzip
+      find: paths="/etc/snowflake/" patterns="snowcd-*.gz"
+      register: find_result
+
+    - name: Unarchive snowcd
+      shell: gunzip -c "{{ item.path }}" > /etc/snowflake/snowcd
+      with_items: "{{ find_result.files }}"
+
+    - name: install prerequisites for CV
+      action: >
+          yum name={{ item }} state=latest update_cache=yes
+      with_items:
+        - amazon-cloudwatch-agent
+        - jq
+        - R
+        - filebeat
+        - python-devel
+        - chrony
+        - nmap
+
+    - name: install Python3
+      yum:
+        name: "{{ packages }}"
+      vars:
+        packages:
+        - python3
+        - python3-pip
+
+    - name: install AWS libraries for Ansible on Python2
+      pip:
+        name:
+          - boto3
+          - botocore
+        umask: "0022"
+
+    - name: Upgrade pip3
+      shell: pip3 install pip --upgrade
+
+    - name: install AWS libraries on Python3
+      pip:
+        name:
+          - boto3
+          - botocore
+          - awscli
+          - cvxpy
+          - pandas
+          - scipy
+          - numpy
+          - mip==1.13.0
+        umask: "0022"
+        executable: pip3
+
+    - name: enable chronyd
+      service:
+        name: chronyd
+        enabled: yes
+        state: started
+
+    - name: enable amazon-cloudwatch-agent
+      service:
+        name: amazon-cloudwatch-agent
+        enabled: yes
+        state: started
+
+    - name: disable cups
+      service:
+        name: cups
+        enabled: no
+        state: stopped
+
+    - name: disable datadog
+      service:
+        name: datadog-agent
+        enabled: no
+        state: stopped
+
+    ###### Users
+    - name: Add axiom user
+      user:
+          name: axiom
+          uid: 605
+
+    ###### Get installation stuff from S3 and install Java
+    - name: Create download directory
+      file:
+          path: /root/install/ #{{ item | dirname }}"
+          state: directory
+
+    - name: Create rds rpm download directory
+      file:
+          path: /root/install/rpm
+          state: directory
+
+    - name: Create R download directory
+      file:
+          path: /root/install/rpm/R
+          state: directory
+
+    - name: Download cv_s3tools_map from s3 for 10.3 onward
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "s3uploader/cv_s3tools_map.yml"
+          mode: get
+          dest: "/root/install/cv_s3tools_map.yml"
+
+    - name: Create a local copy of cv_s3tools_map for 10.3 onward
+      fetch:
+        src: "/root/install/cv_s3tools_map.yml"
+        dest: "/tmp/"
+        flat: yes
+
+    - name: Override CV_S3TOOLS_MAP variable for 10.3 onward
+      include_vars:
+        file: "/tmp/cv_s3tools_map.yml"
+
+    - name: Download s3 objects for CV version 10.1 and onwards
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "{{ item.source }}"
+          mode: get
+          dest: "/root/install/{{ item.dest }}"
+      with_items:
+        - { source: "common/{{ jdk_version }}",          dest: "{{ jdk_version }}" }
+        - { source: "cv/server_v_{{ cv_version }}.tar.gz",     dest: "server_v_{{ cv_version }}.tar.gz" }
+        - { source: "s3uploader/s3-tools_v_{{ CV_S3TOOLS_MAP | selectattr('cv_ver', 'match', cv_version) | map(attribute='s3tools_ver') | list | max }}.tar.gz",     dest: "s3-tools_v_{{ CV_S3TOOLS_MAP | selectattr('cv_ver', 'match', cv_version) | map(attribute='s3tools_ver') | list | max }}.tar.gz" }
+      ignore_errors: True
+
+    - name: Download R libs and related files
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "{{ item.source }}"
+          mode: get
+          dest: "/root/install/rpm/R/{{ item.dest }}"
+      with_items:
+        - { source: "common/r-pack/libs/{{ r_version }}/R-libraries.tar.gz",         dest: "R-libraries.tar.gz"   }
+        - { source: "common/r-pack/libs/{{ r_version }}/R-source-libraries.tar.gz",         dest: "R-source-libraries.tar.gz"   }
+        - { source: "common/r-pack/libs/{{ r_version }}/symphony-5.6.16.tar.gz",     dest: "symphony-5.6.16.tar.gz"   }
+        - { source: "common/r-pack/rpms/R-devel-3.6.0-1.el7.x86_64.rpm",     dest: "R-devel-3.6.0-1.el7.x86_64.rpm"   }
+        - { source: "common/r-pack/rpms/R-core-3.6.0-1.el7.x86_64.rpm",     dest: "R-core-3.6.0-1.el7.x86_64.rpm"   }
+        - { source: "common/r-pack/rpms/R-core-devel-3.6.0-1.el7.x86_64.rpm",     dest: "R-core-devel-3.6.0-1.el7.x86_64.rpm"   }
+        - { source: "common/r-pack/source/epel-release-latest-7.noarch.rpm",     dest: "epel-release-latest-7.noarch.rpm"   }
+
+    - name: Download CV key file
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "keys/cv_{{ cv_version }}/{{ item.source }}"
+          mode: get
+          dest: "/root/install/{{ item.dest }}"
+      with_items:
+        - { source: "key",          dest: "key" }
+
+    - name: install java from a local rpm file
+      yum:
+          name: /root/install/{{ jdk_version }}
+          state: present

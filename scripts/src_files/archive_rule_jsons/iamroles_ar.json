@@ -1,0 +1,22 @@
+{
+    "principal.AWS": {
+               "eq": [
+                   "SST_ACCOUNT_ID",
+                   "MASTER_ACCOUNT_ID",
+                   "DD_ACCOUNT_ID"
+               ]
+    },
+    "resource": {
+                    "eq": [
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-iam-admin",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-iam-datadog-integration-role",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-iam-dev",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-iam-dev-admin",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-iam-security",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-iam-support",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-rds-enhance-monitoring-role",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-securityhub",
+                        "arn:aws:iam::ENVIRONMENT_AWS_ACCOUNT_ID:role/axiomsl-sst-jenkins"
+                    ]
+    }
+}

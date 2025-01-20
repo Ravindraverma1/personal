@@ -1,0 +1,86 @@
+---
+regions:
+  - "global" # This is for all global resource types e.g. IAM
+  - "us-east-2" # US East (Ohio)
+  - "us-east-1" # US East (N. Virginia)
+  - "us-west-1" # US West (N. California)
+  - "us-west-2" # US West (Oregon)
+  - "ap-east-1" # Asia Pacific (Hong Kong)
+  - "ap-south-1" # Asia Pacific (Mumbai)
+  - "ap-northeast-2" # Asia Pacific (Seoul)
+  - "ap-southeast-1" # Asia Pacific (Singapore)
+  - "ap-southeast-2" # Asia Pacific (Sydney)
+  - "ap-northeast-1" # Asia Pacific (Tokyo)
+  - "ca-central-1" # Canada (Central)
+  - "cn-north-1" # China (Beijing)
+  - "cn-northwest-1" # China (Ningxia)
+  - "eu-central-1" # EU (Frankfurt)
+  - "eu-west-1" # EU (Ireland)
+  - "eu-west-2" # EU (London)
+  - "eu-west-3" # EU (Paris)
+  - "eu-north-1" # EU (Stockholm)
+  - "sa-east-1" # South America (São Paulo)
+
+account-blacklist:
+  - 987485473618 # SST-Dev
+  - 779590210279 # Audit-Dev
+  - 291016122617 # SST-Staging
+  - 915080451576 # Audit-Staging
+  - 675315829557 # SST-Prod
+  - 030399636365 # Audit-Prod
+
+# Exclude users (typically used for api access)
+resource-types:
+  excludes:
+    - IAMUser
+    - IAMUserAccessKey
+    - IAMUserPolicy
+    - IAMGroup
+    - IAMGroupPolicyAttachment
+    - IAMUserGroupAttachment
+    - IAMUserPolicyAttachment
+    - S3Object
+    - SESIdentity
+
+accounts:
+  ${ENVIRONMENT_AWS_ACCOUNT_ID}:
+    filters:
+      IAMRole:
+        - type: regex
+          value: "AWSServiceRole.*"
+        - "OrganizationAccountAccessRole"
+        - "axiomsl-sst-jenkins"
+        - "axiomsl-iam-dev-admin"
+        - "axiomsl-iam-dev"
+        - "jenkins-assume-role"
+      IAMPolicy:
+        - type: regex
+          value: ".*/jenkins-role"
+      IAMRolePolicyAttachment:
+        - type: regex
+          value: "AWSServiceRole.*"
+        - type: regex
+          value: "axiomsl-sst-jenkins -> .*"
+        - type: regex
+          value: "axiomsl-iam-dev-admin -> .*"
+        - type: regex
+          value: "axiomsl-iam-dev -> .*"
+        - type: regex
+          value: "jenkins-assume-role -> .*"
+      IAMRolePolicy:
+        - type: regex
+          value: "OrganizationAccountAccessRole -> .*"
+        - type: regex
+          value: "axiomsl-sst-jenkins -> .*"
+      IAMInstanceProfile:
+        - "jenkins-role"
+      IAMInstanceProfileRole:
+        - "jenkins-role -> jenkins-assume-role"
+      CloudFormationStack:
+        - property: Name
+          value: "axiomsl-sst-jenkins-role"
+        - property: Name
+          value: "AxiomIAM"
+      KMSAlias:
+        - type: regex
+          value: "alias/aws/.*"

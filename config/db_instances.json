@@ -1,0 +1,149 @@
+{
+	"instance_class": [
+	  {
+	    "class_name": "db.m4.4xlarge",
+	    "memory": "64",
+	    "ncpu": "16"
+	  },
+	  {
+	    "class_name": "db.m4.2xlarge",
+	    "memory": "32",
+	    "ncpu": "8"
+	  },
+	  {
+	    "class_name": "db.m4.xlarge",
+	    "memory": "16",
+	    "ncpu": "4"
+	  },
+	  {
+	    "class_name": "db.m4.large",
+	    "memory": "8",
+	    "ncpu": "2"
+	  },
+	  {
+	    "class_name": "db.m5.4xlarge",
+	    "memory": "64",
+	    "ncpu": "16"
+	  },
+	  {
+	    "class_name": "db.m5.2xlarge",
+	    "memory": "32",
+	    "ncpu": "8"
+	  },
+	  {
+	    "class_name": "db.m5.xlarge",
+	    "memory": "16",
+	    "ncpu": "4"
+	  },
+	  {
+	    "class_name": "db.m5.large",
+	    "memory": "8",
+	    "ncpu": "2"
+	  },
+	  {
+	    "class_name": "db.r4.4xlarge",
+	    "memory": "122",
+	    "ncpu": "16"
+	  },
+	  {
+	    "class_name": "db.r4.2xlarge",
+	    "memory": "61",
+	    "ncpu": "8"
+	  },
+	  {
+	    "class_name": "db.r4.xlarge",
+	    "memory": "30.5",
+	    "ncpu": "4"
+	  },
+	  {
+	    "class_name": "db.r4.large",
+	    "memory": "15.25",
+	    "ncpu": "2"
+	  },
+	  {
+	    "class_name": "db.r5.4xlarge",
+	    "memory": "128",
+	    "ncpu": "16"
+	  },
+	  {
+	    "class_name": "db.r5.2xlarge",
+	    "memory": "64",
+	    "ncpu": "8"
+	  },
+	  {
+	    "class_name": "db.r5.xlarge",
+	    "memory": "32",
+	    "ncpu": "4"
+	  },
+	  {
+	    "class_name": "db.r5.large",
+	    "memory": "16",
+	    "ncpu": "2"
+	  },
+	  {
+	    "class_name": "db.t2.2xlarge",
+	    "memory": "32",
+	    "ncpu": "8"
+	  },
+	  {
+	    "class_name": "db.t2.xlarge",
+	    "memory": "16",
+	    "ncpu": "4"
+	  },
+	  {
+	    "class_name": "db.t3.2xlarge",
+	    "memory": "32",
+	    "ncpu": "8"
+	  },
+	  {
+	    "class_name": "db.t3.xlarge",
+	    "memory": "16",
+	    "ncpu": "4"
+	  },
+	  {
+	    "class_name": "db.t3.micro",
+	    "memory": "1",
+	    "ncpu": "2"
+	  },
+	  {
+	    "class_name": "db.m3.medium",
+	    "memory": "3.75",
+	    "ncpu": "1"
+	  },
+	  {
+	    "class_name": "db.r6g.large",
+	    "memory": "16",
+	    "ncpu": "2"
+	  },
+	  {
+	    "class_name": "db.r6g.xlarge",
+	    "memory": "32",
+	    "ncpu": "4"
+	  },
+	  {
+	    "class_name": "db.r6g.2xlarge",
+	    "memory": "64",
+	    "ncpu": "8"
+	  },
+	  {
+	    "class_name": "db.r6g.4xlarge",
+	    "memory": "128",
+	    "ncpu": "16"
+	  },
+	  {
+	    "class_name": "db.r6g.8xlarge",
+	    "memory": "256",
+	    "ncpu": "32"
+	  },
+	  {
+	    "class_name": "db.r6g.12xlarge",
+	    "memory": "384",
+	    "ncpu": "48"
+	  },
+	  {
+	    "class_name": "db.r6g.16xlarge",
+	    "memory": "512",
+	    "ncpu": "64"
+	  }
+	]
+}

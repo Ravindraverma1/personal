@@ -1,0 +1,153 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    #TC_VERSION: tomcat_v_10_0_15_2018-11-15   #_8_5_14_2017-05-05
+    TC_DIR: axiom_tomcat_server
+    CV_INSTALL_DIR: /opt/axiom
+    JDK_DIR: /usr/java/latest
+    ENABLE_HTTPS: true
+    
+  tasks:
+    - name: Wait for the EBS
+      wait_for:
+          path: /dev/xvdh
+    - filesystem:
+          fstype: ext4
+          dev: /dev/xvdh
+    - mount:
+          path: /opt/axiom
+          src: /dev/xvdh
+          fstype: ext4
+          state: mounted
+    - file:
+          path: "{{ item }}"
+          state: directory
+          recurse: yes
+      with_items:
+          - "/opt/axiom/shared/logs/tomcat"
+          - "/opt/axiom/axiomServer/tmpDir"
+
+    - name: Add axiom user
+      user:
+          name: axiom
+          uid: 605
+
+    - name: Set TC_VERSION (prior to 10.0.15)
+      set_fact:
+          TC_VERSION: "tomcat_1_3-2018-07-16"
+      when: cv_version < '10_0_15'
+
+    - name: Set TC_VERSION (10.0.15 and above)
+      set_fact:
+          TC_VERSION: "tomcat_v_{{ cv_version }}"
+      when: cv_version >= '10_0_15'
+
+    - name: Download s3 objects
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "{{ item.source }}"
+          mode: get
+          dest: "/tmp/{{ item.dest }}"
+      with_items:
+        - { source: "common/{{ jdk_version }}",                  dest: "{{ jdk_version }}" }
+        - { source: "tomcat/{{ TC_VERSION }}.tar.gz",                  dest: "{{ TC_VERSION }}.tar.gz" }
+        - { source: "tomcat/TC_install.sh",                            dest: "TC_install.sh" }
+
+    - name: Download TC install.properties file (<10.0.15)
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "{{ item.source }}"
+          mode: get
+          dest: "/tmp/{{ item.dest }}"
+      with_items:
+        - { source: "tomcat/axiom_tomcat_server.properties_10_0_6.j2", dest: "axiom_tomcat_server.properties.j2" }
+      when: cv_version < '10_0_15'
+
+    - name: Download TC install.properties file (>=10.3)
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "{{ item.source }}"
+          mode: get
+          dest: "/tmp/{{ item.dest }}"
+      with_items:
+        - { source: "tomcat/axiom_tomcat_server.properties_{{ cv_version }}.j2", dest: "axiom_tomcat_server.properties.j2" }
+
+    # Because of CIS Amazon Linux default umask of 027 we need to grant 'others' read access to files downloaded from S3.
+    # For modules like unarchive or template ansible in local mode is first accessing the files 'locally'
+    # without using 'become' so is accessing them as ec2-user. And files are downloaded using 'become' (so as root)
+    # with umask 027 so ec2-user cannot access them.
+    - name: Fix permissions for s3 downloads.
+      file:
+          path: "/tmp/{{ item.dest }}"
+          mode: "o+r"
+      with_items:
+        - { source: "{{ jdk_version }}",            dest: "{{ jdk_version }}" }
+        - { source: "{{ TC_VERSION }}.tar.gz",            dest: "{{ TC_VERSION }}.tar.gz" }
+        - { source: "axiom_tomcat_server.properties.j2",  dest: "axiom_tomcat_server.properties.j2" }
+        - { source: "TC_install.sh",                      dest: "TC_install.sh" }
+
+    - name: Extract Tomcat installation archive to /tmp
+      unarchive:
+          src: /tmp/{{ TC_VERSION }}.tar.gz
+          dest: /tmp
+
+    - name: Edit tomcat installation template (<10.0.15)
+      template:
+          src: /tmp/axiom_tomcat_server.properties.j2
+          dest: /tmp/axiom_tomcat_server/axiom_tomcat_server.properties
+      when: cv_version < '10_0_15'
+
+    - name: Edit tomcat installation template (>=10.0.15)
+      template:
+          src: /tmp/axiom_tomcat_server.properties.j2
+          dest: /tmp/install.properties
+      when: cv_version >= '10_0_15'
+
+    - name: install Tomcat (<10.0.15)
+      script: /tmp/TC_install.sh
+      args:
+          chdir: /tmp
+      register: result
+      when: cv_version < '10_0_15'
+
+    - name: install Tomcat (~10.0.15)
+      command: /tmp/install.sh
+      register: result
+      when: cv_version >= '10_0_15'
+
+    - debug:
+          msg: "{{ result }}"
+
+    #CV_INSTALL_DIR=/opt/axiom
+    - name: Download war file (>=10.0.15)
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "tomcat/{{ item.source }}"
+          mode: get
+          dest: "{{ CV_INSTALL_DIR }}/tomcat/webapps/{{ item.dest }}"
+      with_items:
+        - { source: "cv_{{ cv_version }}.war",            dest: "cv.war" }
+      when: cv_version >= '10_0_15'
+
+    - name: Download war file (<10.0.15)
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "tomcat/{{ item.source }}"
+          mode: get
+          dest: "{{ CV_INSTALL_DIR }}/tomcat/apache-tomcat/webapps/{{ item.dest }}"
+      with_items:
+        - { source: "cv_{{ cv_version }}.war",            dest: "cv.war" }
+      when: cv_version < '10_0_15'
+
+    - name: Fix user for Tomcat
+      shell:  sed -i -e 's/TOMCAT_USER=tomcat/TOMCAT_USER=axiom/g' /opt/axiom/tomcat/apache-tomcat/bin/axiom
+      when: cv_version < '10_0_15'
+
+    - name: change perms
+      file:
+          path: /opt/axiom
+          owner: axiom
+          group: axiom
+          state: directory
+          recurse: yes

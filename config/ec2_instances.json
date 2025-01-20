@@ -1,0 +1,148 @@
+{
+  "instance_class": [
+    {
+      "class_name": "m5.8xlarge",
+      "memory": "128",
+      "ncpu": "32",
+      "max_heap_mem": "124"
+    },
+    {
+      "class_name": "m5.4xlarge",
+      "memory": "64",
+      "ncpu": "16",
+      "max_heap_mem": "60"
+    },
+    {
+      "class_name": "m5.2xlarge",
+      "memory": "32",
+      "ncpu": "8",
+      "max_heap_mem": "28"
+    },
+    {
+      "class_name": "m5.xlarge",
+      "memory": "16",
+      "ncpu": "4",
+      "max_heap_mem": "12"
+    },
+    {
+      "class_name": "m5.large",
+      "memory": "8",
+      "ncpu": "2",
+      "max_heap_mem": "6"
+    },
+    {
+      "class_name": "m4.4xlarge",
+      "memory": "64",
+      "ncpu": "16",
+      "max_heap_mem": "60"
+    },
+    {
+      "class_name": "m4.2xlarge",
+      "memory": "32",
+      "ncpu": "8",
+      "max_heap_mem": "28"
+    },
+    {
+      "class_name": "m4.xlarge",
+      "memory": "16",
+      "ncpu": "4",
+      "max_heap_mem": "12"
+    },
+    {
+      "class_name": "m4.large",
+      "memory": "8",
+      "ncpu": "2",
+      "max_heap_mem": "6"
+    },
+    {
+      "class_name": "r4.4xlarge",
+      "memory": "122",
+      "ncpu": "16",
+      "max_heap_mem": "118"
+    },
+    {
+      "class_name": "r4.2xlarge",
+      "memory": "61",
+      "ncpu": "8",
+      "max_heap_mem": "57"
+    },
+    {
+      "class_name": "r4.xlarge",
+      "memory": "30.5",
+      "ncpu": "4",
+      "max_heap_mem": "26"
+    },
+    {
+      "class_name": "r4.large",
+      "memory": "15.25",
+      "ncpu": "2",
+      "max_heap_mem": "12"
+    },
+    {
+      "class_name": "r5.8xlarge",
+      "memory": "256",
+      "ncpu": "32",
+      "max_heap_mem": "252"
+    },
+    {
+      "class_name": "r5.4xlarge",
+      "memory": "128",
+      "ncpu": "16",
+      "max_heap_mem": "124"
+    },
+    {
+      "class_name": "r5.2xlarge",
+      "memory": "64",
+      "ncpu": "8",
+      "max_heap_mem": "60"
+    },
+    {
+      "class_name": "r5.xlarge",
+      "memory": "32",
+      "ncpu": "4",
+      "max_heap_mem": "28"
+    },
+    {
+      "class_name": "r5.large",
+      "memory": "16",
+      "ncpu": "2",
+      "max_heap_mem": "12"
+    },
+    {
+      "class_name": "t2.2xlarge",
+      "memory": "32",
+      "ncpu": "8",
+      "max_heap_mem": "28"
+    },
+    {
+      "class_name": "t2.xlarge",
+      "memory": "16",
+      "ncpu": "4",
+      "max_heap_mem": "12"
+    },
+    {
+      "class_name": "t2.large",
+      "memory": "8",
+      "ncpu": "2",
+      "max_heap_mem": "6"
+    },
+    {
+      "class_name": "t3.large",
+      "memory": "8",
+      "ncpu": "2",
+      "max_heap_mem": "6"
+    },
+    {
+      "class_name": "t3.xlarge",
+      "memory": "16",
+      "ncpu": "4",
+      "max_heap_mem": "12"
+    },
+    {
+      "class_name": "t3.2xlarge",
+      "memory": "32",
+      "ncpu": "8",
+      "max_heap_mem": "28"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "iam_instance_profile": "packer-s3-access",
+  "release": "${RELEASE}",
+  "profile": "${SST_AWS_PROFILE}",
+  "region": "${PACKER_AWS_REGION}",
+  "cv_version": "${CV_VERSION}",
+  "packer_sg_id": "${PACKER_SECURITY_GROUP_ID}",
+  "ebs_encyption_key_arn": "${EBS_ENCRYPTION_KEY_ARN}",
+  "jdk_version": "${JDK_VERSION}",
+  "cloudwatch_mon_script_file": "${CLOUDWATCH_MONITOR_SCRIPT}",
+  "dd_id": "${DD_ID}",
+  "cv_root_vol_size": "${CV_ROOT_VOL_SIZE}",
+  "nginx_root_vol_size": "${NGINX_ROOT_VOL_SIZE}",
+  "tomcat_root_vol_size": "${TOMCAT_ROOT_VOL_SIZE}",
+  "r_version": "${R_VERSION}",
+  "cv_major_version": "${CV_MAJOR_VERSION}",
+  "ami_owner": "${SST_ACCOUNT_ID}",
+  "logstash_minor_ver": "${LOGSTASH_MINOR_VER}"
+}

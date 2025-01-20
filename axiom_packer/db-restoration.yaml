@@ -1,0 +1,110 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    # No need to update for 10.3 onward. Delete CV_S3TOOLS_MAP var once all envs are >= 10.3.
+    CV_S3TOOLS_MAP:
+      - cv_ver: 10_1_1_2020-04-30
+        s3tools_ver: 1_1_2020-05-08
+      - cv_ver: 10_2_0_2020-06-22
+        s3tools_ver: 1_1_2020-05-08
+      - cv_ver: 10_2_1_2020-07-28
+        s3tools_ver: 1_1_2020-05-08
+
+  tasks:
+    ########## Packages and upgrades
+    - name: install boto
+      pip:
+          name: boto
+          state: present
+
+    - name: install boto3
+      pip:
+          name: boto3
+          state: present
+
+    - name: install botocore for version compatibility with boto3, remove this when forward comaptibilty criterion is met in the future
+      pip:
+          name: botocore
+          state: present
+
+    - name: remove ntp-client
+      yum:
+        name: ntp*
+        state: absent
+
+    - name: install epel7
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+
+    - name: install prerequisites
+      action: >
+          yum name={{ item }} state=latest update_cache=yes
+      with_items:
+        - amazon-cloudwatch-agent
+        - jq
+        - python-devel
+        - chrony
+
+    - name: enable chronyd
+      service:
+        name: chronyd
+        enabled: yes
+        state: started
+
+    - name: enable amazon-cloudwatch-agent
+      service:
+        name: amazon-cloudwatch-agent
+        enabled: yes
+        state: started
+
+    ###### Users
+    - name: Add axiom user
+      user:
+          name: axiom
+          uid: 605
+
+    ###### Get installation stuff from S3 and install Java
+    - name: Create download directory
+      file:
+          path: /root/install/ #{{ item | dirname }}"
+          state: directory
+
+    - name: Create rds rpm download directory
+      file:
+          path: /root/install/rpm
+          state: directory
+
+    - name: Download cv_s3tools_map from s3 for 10.3 onward
+      aws_s3:
+        bucket:  axiom-data-transfer
+        object: "s3uploader/cv_s3tools_map.yml"
+        mode: get
+        dest: "/root/install/cv_s3tools_map.yml"
+
+    - name: Create a local copy of cv_s3tools_map for 10.3 onward
+      fetch:
+        src: "/root/install/cv_s3tools_map.yml"
+        dest: "/tmp/"
+        flat: yes
+
+    - name: Load CV_S3TOOLS_MAP variable for 10.3 onward
+      include_vars:
+        file: "/tmp/cv_s3tools_map.yml"
+
+    - name: Download s3 objects for CV version 10.1 and onwards
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "{{ item.source }}"
+          mode: get
+          dest: "/root/install/{{ item.dest }}"
+      with_items:
+        - { source: "common/{{ jdk_version }}",          dest: "{{ jdk_version }}" }
+        - { source: "s3uploader/s3-tools_v_{{ CV_S3TOOLS_MAP | selectattr('cv_ver', 'match', cv_version) | map(attribute='s3tools_ver') | list | max }}.tar.gz",     dest: "s3-tools_v_{{ CV_S3TOOLS_MAP | selectattr('cv_ver', 'match', cv_version) | map(attribute='s3tools_ver') | list | max }}.tar.gz" }
+      ignore_errors: True
+
+    - name: install java from a local rpm file
+      yum:
+          name: /root/install/{{ jdk_version }}
+          state: present

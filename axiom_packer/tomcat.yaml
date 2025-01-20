@@ -1,0 +1,115 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    dd_id: "{{ dd_id }}"
+
+  tasks:
+    ########## Packages and upgrades
+    - name: fix problems with yum caching
+      lineinfile:
+        path: /etc/yum.conf
+        line: http_caching=packages
+    - name: install filebeat GPG key
+      rpm_key:
+        key: https://packages.elastic.co/GPG-KEY-elasticsearch
+        state: present
+    - name: remove ntp-client
+      yum:
+        name: ntp*
+        state: absent
+    - name: install boto3
+      pip:
+          name: boto3
+          state: present
+
+    - name: install botocore for version compatibility with boto3, remove this when forward comaptibilty criterion is met in the future
+      pip:
+          name: botocore
+          state: present
+
+    - name: install elastic repo
+      yum_repository:
+        name: elastic-7.x
+        description: Elastic repository for 7.x packages
+        baseurl: https://artifacts.elastic.co/packages/7.x/yum
+        state: present
+    - name: install datadog agent
+      environment:
+          DD_API_KEY: "{{ dd_id }}"
+          DD_INSTALL_ONLY: "true"
+          DD_SITE: "datadoghq.com"
+          DD_AGENT_MAJOR_VERSION: "7"
+      shell: bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh )"
+    - name: install epel7
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+    - name: install prerequisites
+      action: >
+          yum name={{ item }} state=latest update_cache=yes
+      with_items:
+        - amazon-cloudwatch-agent
+        - jq
+        - filebeat
+        - chrony
+        - nmap
+    - name: enable chronyd
+      service:
+        name: chronyd
+        enabled: yes
+        state: started
+    - name: enable amazon-cloudwatch-agent
+      service:
+        name: amazon-cloudwatch-agent
+        enabled: yes
+        state: started
+    - name: disable datadog
+      service:
+        name: datadog-agent
+        enabled: no
+        state: stopped
+
+    ###### Users
+    - name: Add axiom user
+      user:
+        name: axiom
+        uid: 605
+    ###### Get installation stuff from S3 and install Java
+    - name: Create download directory
+      file:
+        path: /root/install/ #{{ item | dirname }}"
+        state: directory
+    - name: Download s3 objects
+      aws_s3:
+        bucket:  axiom-data-transfer
+        object: "common/{{ item }}"
+        mode: get
+        dest: "/root/install/{{ item }}"
+      with_items:
+          - "{{ jdk_version }}"
+    - name: create filebeat cleaner folder
+      file:
+        path: /opt/cleaner
+        owner: root
+        group: root
+        recurse: yes
+        state: directory
+      when: cv_version >= '10_0_25'
+    - name: Download filebeat cleaner
+      aws_s3:
+        bucket:  axiom-data-transfer
+        object: "common/axiom-filebeat-cleaner.tar.gz"
+        mode: get
+        dest: "/opt/cleaner/axiom-filebeat-cleaner.tar.gz"
+      when: cv_version >= '10_0_25'
+    - name: Extract filebeat cleaner into /opt/axiom/cleaner
+      unarchive:
+        src: /opt/cleaner/axiom-filebeat-cleaner.tar.gz
+        dest: /opt/cleaner
+        remote_src: yes
+      when: cv_version >= '10_0_25'
+    - name: install java from a local rpm file
+      yum:
+        name: /root/install/{{ jdk_version }}
+        state: present

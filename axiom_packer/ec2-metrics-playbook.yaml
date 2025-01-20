@@ -1,0 +1,51 @@
+---
+- hosts: all
+  tasks:
+  - name: Installs Perl libraries that aws-scripts-mon needs
+    yum:
+      name: "{{ perl_libaries }}"
+    vars:
+      perl_libaries:
+      - perl-Switch
+      - perl-DateTime
+      - perl-Sys-Syslog
+      - perl-LWP-Protocol-https
+      - perl-Digest-SHA.x86_64
+    become: yes
+    become_method: sudo
+
+  - name: Downloads the aws-scripts-mon from AWS S3 site
+    get_url:
+      url: https://aws-cloudwatch.s3.amazonaws.com/downloads/{{ cloudwatch_mon_script_file }}
+      dest: /tmp/{{ cloudwatch_mon_script_file }}
+
+  - name: Unpacks the downloaded aws-scripts-mon ZIP archive
+    unarchive:
+      src: /tmp/{{ cloudwatch_mon_script_file }}
+      dest: /opt
+      remote_src: yes
+    become: yes
+    become_method: sudo
+
+  - name: Wipe off the downloaded aws-scripts-mon ZIP from /tmp
+    file:
+      path: /tmp/{{ cloudwatch_mon_script_file }}
+      state: absent
+
+  - name: Fix permission of the unpacked aws-scripts-mon in /opt
+    file:
+      path: /opt/aws-scripts-mon
+      mode: 0755
+      recurse: yes
+      state: directory
+    become: yes
+    become_method: sudo
+
+  - name: Creates an entry "EC2 Disk and Mem Metrics to CloudWatch" in crontab
+    cron:
+      name: "EC2 Disk and Mem Metrics to CloudWatch"
+      minute: "*/5"
+      job: "/opt/aws-scripts-mon/mon-put-instance-data.pl --mem-util --mem-avail --memory-units=megabytes --swap-util --swap-used --disk-path=/ --disk-space-used --disk-space-avail --disk-space-util --disk-space-units=megabytes --from-cron"
+      state: present
+    become: yes
+    become_method: sudo

@@ -1,0 +1,184 @@
+---
+- hosts: localhost
+
+  vars:
+    target_domains:
+      - nginx.axiomsl
+      - cv.axiomsl
+      - tomcat.axiomsl
+    restapi2pass: "{{ lookup('password', '../restapi2pass') }}"
+    validDays : 9999
+
+  tasks:
+    - name: Create CA directory.
+      file:
+        path: "{{ playbook_dir }}/ssl/ca"
+        state: directory
+        recurse: yes
+
+    - name: Create CERTS directory.
+      file:
+        path: "{{ playbook_dir }}/ssl/certs"
+        state: directory
+        recurse: yes
+
+    - name: Create Client directory.
+      file:
+        path: "{{ playbook_dir }}/ssl/client"
+        state: directory
+        recurse: yes
+
+    - name: Create certs dummy directory.
+      file:
+        path: "{{ playbook_dir }}/tmp/certs_dummy"
+        state: directory
+        recurse: yes
+
+    # do not use  openssl_privatekey module because it is not updated on amazon limux
+    # - name: Generate CA priv key.
+    #   openssl_privatekey:
+    #     path: /etc/my_pki/ca/ca.key
+
+    - name: Generate CA priv key.
+      command: "openssl genrsa -out ca.key 4096"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/ca/"
+        creates: ca.key
+
+    - name: Generate CA cert.
+      command: "openssl req -key ca.key -new -x509 -days {{validDays}} -sha256 -extensions v3_ca  -out ca.pem -subj '/CN=ca.axiomsl/C=US/O=AxiomSL/OU=Operations'"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/ca/"
+        creates: "{{ playbook_dir }}/ssl/ca/ca.pem"
+
+    - name: Create database file.
+      file:
+        path: "{{ playbook_dir }}/ssl/ca/index.txt"
+        state: touch
+
+    - name: Create serial file.
+      shell: echo 1000 > "{{ playbook_dir }}/ssl/ca/serial"
+      args:
+        creates: "{{ playbook_dir }}/ssl/ca/serial"
+
+    - name: Copy CA conf.
+      copy:
+        content: |
+                 [ ca ]
+                 default_ca = CA_default
+
+                 [ CA_default ]
+                 dir             = {{ playbook_dir }}/ssl/ca
+                 private_key     = $dir/ca.key
+                 certificate     = $dir/ca.pem
+                 new_certs_dir   = "{{ playbook_dir }}/tmp/certs_dummy"
+                 database        = $dir/index.txt
+                 serial          = $dir/serial
+                 policy          = policy_loose
+
+                 [ server_cert ]
+                 # Extensions for server certificates (`man x509v3_config`).
+                 basicConstraints = CA:FALSE
+                 nsCertType = server
+                 nsComment = "OpenSSL Generated Server Certificate"
+                 subjectKeyIdentifier = hash
+                 authorityKeyIdentifier = keyid,issuer:always
+                 keyUsage = critical, digitalSignature, keyEncipherment
+                 extendedKeyUsage = serverAuth
+
+                 [ policy_loose ]
+                 countryName             = optional
+                 stateOrProvinceName     = optional
+                 localityName            = optional
+                 organizationName        = optional
+                 organizationalUnitName  = optional
+                 commonName              = supplied
+                 emailAddress            = optional
+        dest: "{{ playbook_dir }}/ssl/ca/openssl.conf"
+
+    # - name: Generate Keys.
+    #   openssl_privatekey:
+    #     path: "/etc/my_pki/certs/{{ item }}.key"
+    #   with_items: "{{ target_domains }}"
+
+    - name: Generate Keys.
+      command: "openssl genrsa -out {{ item }}.key 4096"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/certs/"
+        creates: "{{ item }}.key"
+      with_items: "{{ target_domains }}"
+
+    - name: Permission Fix.
+      file:
+        path: "{{ playbook_dir }}/ssl/certs/{{ item }}.key"
+        mode: 0644
+      with_items: "{{ target_domains }}"
+
+    # - name: Generate CSRs.
+    #   openssl_csr:
+    #     path: "/etc/my_pki/certs/{{ item }}.csr"
+    #     privatekey_path: "/etc/my_pki/certs/{{ item }}.key"
+    #     common_name: "{{ item }}"
+    #   with_items: "{{ target_domains }}"
+
+    - name: Create the server CSR 
+      command: "openssl req -subj '/CN={{ item }}' -sha256 -new -key {{ item }}.key -out {{ item }}.csr"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/certs/"
+        creates: "{{ item }}.csr"
+      with_items: "{{ target_domains }}"
+
+    - name: Sign keys (generate certificates).
+      command: "openssl ca -batch -config {{ playbook_dir }}/ssl/ca/openssl.conf -extensions server_cert -days {{validDays}} -notext -md sha256 -in {{ item }}.csr -out {{ item }}.pem"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/certs/"
+        creates: "{{ item }}.pem"
+      with_items: "{{ target_domains }}"
+
+    - name: Permission Fix.
+      file:
+        path: "{{ playbook_dir }}/ssl/certs/{{ item }}.pem"
+        mode: 0644
+      with_items: "{{ target_domains }}"
+
+    - name: Copy client cert configuration file
+      copy:
+        src: "{{ playbook_dir }}/restapi2.conf"
+        dest: "{{ playbook_dir }}/ssl/client/restapi2.conf"
+        mode: "0644"
+
+    - name: Generate client restapi2 key.
+      command: "openssl genrsa -out restapi2.key 4096 -nodes"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/client/"
+        creates: "{{ playbook_dir }}/ssl/client/restapi2.key"
+
+    - name: Generate client cert CSR
+      command: "openssl req -new -config restapi2.conf -keyout restapi2.key -out restapi2.csr"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/client/"
+        creates: "{{ playbook_dir }}/ssl/client/restapi2.csr"
+
+    - name: Sign client cert
+      command: "openssl x509 -req -days {{validDays}} -in restapi2.csr -CA ../ca/ca.pem -CAkey ../ca/ca.key -set_serial 03 -out restapi2.crt -extfile restapi2.conf -extensions req_ext"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/client/"
+        creates: "{{ playbook_dir }}/ssl/client/restapi2.crt"
+
+    - name: Create client p12
+      command: "openssl pkcs12 -export -clcerts -in restapi2.crt -inkey restapi2.key -out restapi2.p12 -password pass:{{ restapi2pass }}"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/client/"
+        creates: "{{ playbook_dir }}/ssl/client/restapi2.p12"
+
+    - name: Create client cert pem
+      command: "openssl pkcs12 -in restapi2.p12 -out restapi2.pem -clcerts -password pass:{{ restapi2pass }} -passout pass:{{ restapi2pass }}"
+      args:
+        chdir: "{{ playbook_dir }}/ssl/client/"
+        creates: "{{ playbook_dir }}/ssl/client/restapi2.pem"
+
+    - name: Store restapi2 certpass
+      copy:
+        content: |
+          restapi2_certpass = "{{ restapi2pass }}"
+        dest: "{{ playbook_dir }}/ssl/client/restapi2pass"

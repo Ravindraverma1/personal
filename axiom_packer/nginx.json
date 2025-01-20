@@ -1,0 +1,152 @@
+{
+  "variables": {
+    "iam_instance_profile": "",
+    "profile": "",
+    "region": "",
+    "cv_version": "",
+    "ebs_encyption_key_arn": "",
+    "release": "",
+    "jdk_version": "",
+    "dd_id": "",
+    "built_by": "Jenkins on SST",
+    "cv_root_vol_size": "",
+    "tomcat_root_vol_size": ""
+  },
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "spot_price": "auto",
+      "spot_price_auto_product": "Linux/UNIX",
+      "spot_instance_types": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium"
+      ],
+      "name": "nginx",
+      "region": "{{user `region`}}",
+      "profile": "{{user `profile`}}",
+      "iam_instance_profile": "{{user `iam_instance_profile`}}",
+      "encrypt_boot": true,
+      "kms_key_id": "{{user `ebs_encyption_key_arn`}}",
+      "source_ami_filter": {
+        "filters": {
+          "virtualization-type": "hvm",
+          "name": "amzn2-ami-hvm-2.0.20210813.1-x86_64-gp2",
+          "root-device-type": "ebs"
+        },
+        "most_recent": true,
+        "owners": "137112412989"
+      },
+      "ssh_username": "ec2-user",
+      "ami_name": "packer-axiom-nginx-{{ user `release` }}",
+      "security_group_id": "{{user `packer_sg_id`}}",
+      "tags": {
+        "Built_By": "{{ user `built_by` }}",
+        "Release": "{{ user `release` }}",
+        "Name": "packer-axiom-nginx-{{ user `release` }}"
+      },
+      "launch_block_device_mappings": [
+          {
+              "device_name": "/dev/xvda",
+              "volume_size": "{{user `nginx_root_vol_size`}}",
+              "volume_type": "gp3",
+              "delete_on_termination": true
+          }
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "scripts": [
+        "common/init.sh"
+      ],
+      "type": "shell",
+      "only": [
+        "nginx"
+      ],
+      "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E '{{ .Path }}'"
+    },
+    {
+      "type": "file",
+      "source": "scripts/nginx-init-install-properties.sh",
+      "destination": "/tmp/nginx-init-install-properties.sh",
+      "only": [
+        "nginx"
+      ]
+    },
+    {
+      "inline": [
+        "chmod +x /tmp/nginx-init-install-properties.sh"
+      ],
+      "type": "shell",
+      "only": [
+        "nginx"
+      ]
+    },
+    {
+      "type": "ansible-local",
+      "playbook_file": "nginx.yaml",
+      "extra_arguments": [
+        "--extra-vars \"cv_version={{user `cv_version`}} jdk_version={{ user `jdk_version` }} dd_id={{user `dd_id`}}\""
+      ],
+      "only": [
+        "nginx"
+      ]
+    },
+    {
+      "type": "ansible-local",
+      "playbook_file": "ec2-metrics-playbook.yaml",
+      "extra_arguments": [
+        "--extra-vars \"cloudwatch_mon_script_file={{user `cloudwatch_mon_script_file`}}\""
+      ],
+      "only": [
+        "nginx"
+      ]
+    },
+    {
+      "scripts": [
+        "common/cis.sh"
+      ],
+      "type": "shell",
+      "only": [
+        "nginx"
+      ],
+      "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E '{{ .Path }}'"
+    },
+    {
+      "type": "shell",
+      "inline": ["sudo reboot"],
+      "inline_shebang": "/bin/bash -e",
+      "expect_disconnect": true,
+      "only": [
+        "nginx"
+      ]
+    },
+    {
+      "type": "ansible-local",
+      "playbook_file": "common/additional_cis.yaml",
+      "extra_arguments": [],
+      "pause_before": "120s",
+      "only": [
+        "nginx"
+      ]
+    },
+    {
+      "type": "shell",
+      "script": "common/post-restart.sh",
+      "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E '{{ .Path }}'",
+      "expect_disconnect": true,
+      "only": [
+        "nginx"
+      ]
+    }
+  ],
+
+  "post-processors": [
+    {
+      "type": "manifest",
+      "output": "packer-manifest.json",
+      "strip_path": true
+    }
+  ]
+}

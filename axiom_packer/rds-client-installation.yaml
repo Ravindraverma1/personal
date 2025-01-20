@@ -1,0 +1,169 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    ora_basic_rpm_package: 'oracle-instantclient12.2-basic-12.2.0.1.0-1.x86_64.rpm'
+    ora_devel_rpm_package: 'oracle-instantclient12.2-devel-12.2.0.1.0-1.x86_64.rpm'
+    ora_sqlplus_rpm_package: 'oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.x86_64.rpm'
+    ora_tools_rpm_package: 'oracle-instantclient12.2-tools-12.2.0.1.0-1.x86_64.rpm'
+    ora_wallet_pki_package: 'oracle-instantclient12.2-wallet-12.2.0.1.0-1.x86_64.zip'
+    ora19_basic_rpm_package: 'oracle-instantclient19.5-basic-19.5.0.0.0-1.x86_64.rpm'
+    ora19_devel_rpm_package: 'oracle-instantclient19.5-devel-19.5.0.0.0-1.x86_64.rpm'
+    ora19_sqlplus_rpm_package: 'oracle-instantclient19.5-sqlplus-19.5.0.0.0-1.x86_64.rpm'
+    ora19_tools_rpm_package: 'oracle-instantclient19.5-tools-19.5.0.0.0-1.x86_64.rpm'
+    #ora19_wallet_pki_package: 'oracle-instantclient19-wallet-19.0.0.5.0-1.x86_64.zip'
+    ora19_wallet_pki_package: 'oracle-instantclient12.2-wallet-12.2.0.1.0-1.x86_64.zip'
+    rpm_download_directory: '/root/install/rpm'
+    ora_client_home: '/usr/lib/oracle/12.2/client64'
+    ora19_client_home: '/usr/lib/oracle/19.5/client64'
+    #db_engine: "{{ db_engine }}"
+    postgresql10_libs_rpm: 'postgresql10-libs-10.7-2PGDG.rhel7.x86_64.rpm'
+    postgresql10_rpm: 'postgresql10-10.7-2PGDG.rhel7.x86_64.rpm'
+    postgresql11_libs_rpm: 'postgresql11-libs-11.8-1PGDG.rhel7.x86_64.rpm'
+    postgresql11_rpm: 'postgresql11-11.8-1PGDG.rhel7.x86_64.rpm'
+    postgresql12_libs_rpm: 'postgresql12-libs-12.4-1PGDG.rhel7.x86_64.rpm'
+    postgresql12_rpm: 'postgresql12-12.4-1PGDG.rhel7.x86_64.rpm'
+  tasks:
+  ########## Ora client packages and upgrades
+  - name: Create rds rpm download directory
+    file:
+        path: /root/install/rpm
+        state: directory
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  - name: Download postgresql10 client rpm applicable for Amazon Linux 2
+    aws_s3:
+        bucket:  axiom-data-transfer
+        object: "{{ item.source }}"
+        mode: get
+        dest: "{{rpm_download_directory}}/{{ item.dest }}"
+    with_items:
+      - { source: "common/psql/{{postgresql10_libs_rpm}}", dest: "{{postgresql10_libs_rpm}}" }
+      - { source: "common/psql/{{postgresql10_rpm}}",      dest: "{{postgresql10_rpm}}"      }
+
+  - name: Download postgresql 11 client rpm applicable for Amazon Linux 2
+    aws_s3:
+        bucket:  axiom-data-transfer
+        object: "{{ item.source }}"
+        mode: get
+        dest: "{{rpm_download_directory}}/{{ item.dest }}"
+    with_items:
+      - { source: "common/psql/{{postgresql11_libs_rpm}}", dest: "{{postgresql11_libs_rpm}}" }
+      - { source: "common/psql/{{postgresql11_rpm}}",      dest: "{{postgresql11_rpm}}"      }
+
+  - name: Download postgresql 12 client rpm applicable for Amazon Linux 2
+    aws_s3:
+        bucket:  axiom-data-transfer
+        object: "{{ item.source }}"
+        mode: get
+        dest: "{{rpm_download_directory}}/{{ item.dest }}"
+    with_items:
+      - { source: "common/psql/{{postgresql12_libs_rpm}}", dest: "{{postgresql12_libs_rpm}}" }
+      - { source: "common/psql/{{postgresql12_rpm}}",      dest: "{{postgresql12_rpm}}"      }
+
+  - name: Create ssl wallet directory
+    file:
+        path: "{{ora_client_home}}/ssl_wallet"
+        state: directory
+        owner: axiom
+        group: axiom
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  - name: Create ssl wallet directory
+    file:
+        path: "{{ora19_client_home}}/ssl_wallet"
+        state: directory
+        owner: axiom
+        group: axiom
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  - name: Download ora rpm - to be made conditional
+    aws_s3:
+        bucket:  axiom-data-transfer
+        object: "{{ item.source }}"
+        mode: get
+        dest: "{{rpm_download_directory}}/{{ item.dest }}"
+    with_items:
+      - { source: "common/ora/{{ora_basic_rpm_package}}",     dest: "{{ora_basic_rpm_package}}"   }
+      - { source: "common/ora/{{ora_devel_rpm_package}}",     dest: "{{ora_devel_rpm_package}}"   }
+      - { source: "common/ora/{{ora_sqlplus_rpm_package}}",   dest: "{{ora_sqlplus_rpm_package}}" }
+      - { source: "common/ora/{{ora_tools_rpm_package}}",     dest: "{{ora_tools_rpm_package}}" }
+      - { source: "common/ora/{{ora_wallet_pki_package}}",    dest: "{{ora_wallet_pki_package}}" }
+      - { source: "common/ora/{{ora19_basic_rpm_package}}",     dest: "{{ora19_basic_rpm_package}}"   }
+      - { source: "common/ora/{{ora19_devel_rpm_package}}",     dest: "{{ora19_devel_rpm_package}}"   }
+      - { source: "common/ora/{{ora19_sqlplus_rpm_package}}",   dest: "{{ora19_sqlplus_rpm_package}}" }
+      - { source: "common/ora/{{ora19_tools_rpm_package}}",     dest: "{{ora19_tools_rpm_package}}" }
+      - { source: "common/ora/{{ora19_wallet_pki_package}}",    dest: "{{ora19_wallet_pki_package}}" }
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  - name: Copy aws cert (pem) to ssl_wallet
+    copy:
+      src: /etc/pki/ca-trust/source/anchors/rds-ca-2019-root.pem
+      dest: "{{ora_client_home}}/ssl_wallet/rds-ca-2019-root.pem"
+      owner: axiom
+      group: axiom
+
+  - name: Copy aws cert (pem) to ssl_wallet ora19
+    copy:
+      src: /etc/pki/ca-trust/source/anchors/rds-ca-2019-root.pem
+      dest: "{{ora19_client_home}}/ssl_wallet/rds-ca-2019-root.pem"
+      owner: axiom
+      group: axiom
+
+  - name: Add sqlplus, sqlldr to path
+    template:
+      src: "/home/ec2-user/oraclient.sh.j2"
+      dest: "/etc/profile.d/oraclient.sh"
+    become: yes
+    become_user: root
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  - name: Update LD_LIBRARY_PATH permissions
+    file:
+      path: "{{ item }}"
+      mode: "u+rwx,g+rwx,o+rwx"
+      state: directory
+      recurse: yes
+    with_items:
+        - "{{ ora_client_home }}/lib"
+        - "{{ ora19_client_home }}/lib"
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  - name: Correct permissions on oracle-home
+    file:
+       dest: "{{ora_client_home}}"
+       owner: "axiom"
+       group: "axiom"
+       mode: "u=rwX,g=rX,o=rX"
+       recurse: "yes"
+
+    ###configure TNS_ADMIN variable and tnsnames.ora for sqlloader to work
+  - name: Create directory TNS_ADMIN
+    file:
+      path: "{{ ora_client_home }}/network/admin"
+      mode: "u+rwx,g+rwx,o+rwx"
+      state: directory
+      owner: axiom
+      group: axiom
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  - name: Correct permissions on oracle-home
+    file:
+       dest: "{{ora19_client_home}}"
+       owner: "axiom"
+       group: "axiom"
+       mode: "u=rwX,g=rX,o=rX"
+       recurse: "yes"
+
+    ###configure TNS_ADMIN variable and tnsnames.ora for sqlloader to work
+  - name: Create directory TNS_ADMIN
+    file:
+      path: "{{ ora19_client_home }}/network/admin"
+      mode: "u+rwx,g+rwx,o+rwx"
+      state: directory
+      owner: axiom
+      group: axiom
+    #when: db_engine == "oracle-se2" or db_engine == "oracle-ee"
+
+  #tnsnames.ora moved to post ami create ansible owing to dependence on customer, env, db_port params which are not available during AMI creation
+    ###sqlplus and sqlldr should be available at this point, end of Ora client installation

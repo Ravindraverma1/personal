@@ -1,0 +1,12 @@
+{
+  "regcloud_regions": [
+    {
+      "aws_region": "eu-central-1",
+      "oci_region": "eu-frankfurt-1"
+    },
+    {
+      "aws_region": "us-east-1",
+      "oci_region": "us-ashburn-1"
+    }
+  ]
+}

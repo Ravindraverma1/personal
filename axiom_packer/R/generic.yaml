@@ -1,0 +1,103 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  tasks:
+    - name: Create symphony install dir
+      file:
+          path: /opt/symphony
+          state: directory
+
+    - name: Check if Symphony installed correctly (required only if clpAPI is included in package list)
+      stat:
+        path: "/opt/symphony/lib/libClp.so"
+      register: stat_result
+#      when: "{{ r_package_install_list is search('clpAPI') }}"
+
+    - name: Copy and unzip Symphony archive
+      unarchive:
+        src: "/root/install/rpm/R/symphony-5.6.16.tar.gz"
+        mode: 0766
+        dest: /opt/symphony
+        remote_src: yes
+      when: stat_result.stat.exists == False
+ #     when: stat_result.stat.exists == False and "{{ r_package_install_list is search('clpAPI') }}"
+
+    - name: Add Symphony in ldconfig config file
+      template:
+         src: "/tmp/R-x86_64.conf.j2"
+         dest: "/etc/ld.so.conf.d/R-x86_64.conf"
+         owner: root
+         group: root
+         mode: 0644
+      when: stat_result.stat.exists == False
+#      when: stat_result.stat.exists == False and "{{ r_package_install_list is search('clpAPI') }}"
+
+    - name: ldconfig rescan
+      action: command /sbin/ldconfig
+      when: stat_result.stat.exists == False
+#      when: stat_result.stat.exists == False and "{{ r_package_install_list is search('clpAPI') }}"
+
+    - name: Add symphony to path
+      template:
+           src: "/tmp/symphony_path.sh.j2"
+           dest: "/etc/profile.d/symphony_path.sh"
+      become: yes
+      become_user: root
+      when: stat_result.stat.exists == False
+#      when: stat_result.stat.exists == False and "{{ r_package_install_list is search('clpAPI') }}"
+
+    - name: Install EPEL repo.
+      yum:
+        name: "/root/install/rpm/R/epel-release-latest-7.noarch.rpm"
+        state: present
+
+    - name: Add Epel repository
+      yum:
+        name: epel-release
+        state: present
+
+    - name: Install prerequisites for the R data.table package
+      yum:
+        name: "{{ item }}"
+        state: latest
+        update_cache: yes
+      loop:
+        - R-devel-3.6.0-1.el7.x86_64
+        - R-core-3.6.0-1.el7.x86_64
+        - R-core-devel-3.6.0-1.el7.x86_64
+        - gcc
+        - libxml2-devel
+        - libxml2
+        - cairo-devel
+        - libcurl-devel
+        - openssl-devel
+
+    - name: Gather the package facts
+      package_facts:
+        manager: "auto"
+
+    - name: Install R packages if not exist
+      yum:
+        name: '/root/install/rpm/R/{{ item.pkg }}'
+        state: present
+      loop:
+        - { name: 'R-devel', pkg: 'R-devel-3.6.0-1.el7.x86_64.rpm' }
+        - { name: 'R-core', pkg: 'R-core-3.6.0-1.el7.x86_64.rpm' }
+        - { name: 'R-core-devel', pkg: 'R-core-devel-3.6.0-1.el7.x86_64.rpm' }
+      when: item.name not in ansible_facts.packages
+      environment: 
+        PATH: "$PATH:/opt/symphony/bin"
+
+    - name: Gather the package facts again
+      package_facts:
+        manager: "auto"
+
+    - name: Verify R packages again after second installation
+      fail:
+        msg: 'Failed to install {{ item.pkg }}. Rerun the create ami pipeline'
+      loop:
+        - { name: 'R-devel', pkg: 'R-devel-3.6.0-1.el7.x86_64.rpm' }
+        - { name: 'R-core', pkg: 'R-core-3.6.0-1.el7.x86_64.rpm' }
+        - { name: 'R-core-devel', pkg: 'R-core-devel-3.6.0-1.el7.x86_64.rpm' }
+      when: item.name not in ansible_facts.packages
+

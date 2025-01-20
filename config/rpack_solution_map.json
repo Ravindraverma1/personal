@@ -1,0 +1,33 @@
+{
+	"r_version":"3.6.0_1",
+	"rpack_solution_map": [
+	  {
+	    "solution_name": "Capital",
+	    "r_pkg_list": "magrittr,Matrix,pkgconfig,lattice,clpAPI,data.table,igraph,generics,Rcpp,fastmatch,lubridate,plyr,reshape"
+	  },
+	  {
+	    "solution_name": "MAS610",
+	    "r_pkg_list": "data.table"
+	  },
+	  {
+	    "solution_name": "B-D US",
+	    "r_pkg_list": "data.table"
+	  },
+	  {
+	    "solution_name": "PRA110",
+	    "r_pkg_list": "data.table"
+	  },
+	  {
+	    "solution_name": "GSD",
+	    "r_pkg_list": "data.table"
+	  },
+	  {
+	    "solution_name": "Anacredit BE, SHSG and RRE (NL)",
+	    "r_pkg_list": "data.table"
+	  },
+	  {
+	    "solution_name": "Others",
+	    "r_pkg_list": "data.table"
+	  }
+	]
+}

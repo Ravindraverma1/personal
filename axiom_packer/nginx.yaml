@@ -1,0 +1,173 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    dd_id: "{{ dd_id }}"
+    
+  tasks:
+    ########## Packages and upgrades
+    - name: install filebeat GPG key
+      rpm_key:
+        key: https://packages.elastic.co/GPG-KEY-elasticsearch
+        state: present
+    - name: install elastic repo
+      yum_repository:
+        name: elastic-7.x
+        description: Elastic repository for 7.x packages
+        baseurl: https://artifacts.elastic.co/packages/7.x/yum
+        state: present
+    - name: install datadog agent
+      environment:
+          DD_API_KEY: "{{ dd_id }}"
+          DD_INSTALL_ONLY: "true"
+          DD_SITE: "datadoghq.com"
+          DD_AGENT_MAJOR_VERSION: "7"
+      shell: bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh )"
+    - name: remove ntp-client and nginx
+      yum:
+        name: "{{ item }}"
+        state: absent
+      with_items:
+        - ntp*
+        - nginx
+    - name: install epel7
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+    - name: install prerequisites
+      action: >
+          yum name={{ item }} state=latest update_cache=yes
+      with_items:
+        - amazon-cloudwatch-agent
+        - jq
+        - filebeat
+        - chrony
+        - nmap
+    - name: install boto3
+      pip:
+          name: boto3
+          state: present
+
+    - name: install botocore for version compatibility with boto3, remove this when forward comaptibilty criterion is met in the future
+      pip:
+          name: botocore
+          state: present
+
+    - name: enable chronyd
+      service:
+        name: chronyd
+        enabled: yes
+        state: started  
+    - name: enable amazon-cloudwatch-agent
+      service:
+        name: amazon-cloudwatch-agent
+        enabled: yes
+        state: started
+    - name: disable datadog
+      service:
+        name: datadog-agent
+        enabled: no
+        state: stopped
+
+    ##### Download Controller View Nginx packages components #####
+    - name: Download s3 objects
+      aws_s3:
+          bucket:  axiom-data-transfer
+          object: "{{ item.source }}"
+          mode: get
+          dest: "/tmp/{{ item.dest }}"
+      with_items:
+        - { source: "common/{{ jdk_version }}",            dest: "{{ jdk_version }}" }
+        - { source: "nginx/nginx7.repo",                          dest: "nginx.repo" }
+        - { source: "nginx/nginx.init",                          dest: "nginx.init" }
+        - { source: "nginx/nginx_v_{{ cv_version }}.tar.gz",     dest: "nginx_v_{{ cv_version }}.tar.gz" }
+
+    # Because of CIS Amazon Linux default umask of 027 we need to grant 'others' read access to files downloaded from S3.
+    # For modules like unarchive or template ansible in local mode is first accessing the files 'locally'
+    # without using 'become' so is accessing them as ec2-user. And files are downloaded using 'become' (so as root)
+    # with umask 027 so ec2-user cannot access them.
+    - name: Fix permissions for s3 downloads.
+      file:
+          path: "/tmp/{{ item }}"
+          mode: "o+r"
+      with_items:
+          - "{{ jdk_version }}"
+          - nginx.repo
+          - nginx.init
+          - nginx_v_{{ cv_version }}.tar.gz
+
+    - name: Installs Java
+      yum :
+          name: /tmp/{{ jdk_version }}
+          state: present
+
+    - name: Sets up nginx mainline repo reference
+      copy:
+          src: "/tmp/nginx.repo"
+          dest: "/etc/yum.repos.d/nginx.repo"
+          owner: "root"
+          group: "root"
+          mode: 0644
+
+    - name: clean up yum repo
+      command: yum clean all
+
+    - name: makecache for yum
+      command: yum makecache
+
+    - name: Installs Nginx mainline release
+      yum:
+          name: "nginx"
+          enablerepo: "nginx"
+          state: "latest"
+
+    - name: Installing NGINX init script (service)
+      copy:
+          src: "/tmp/nginx.init"
+          dest: "/etc/init.d/nginx"
+          owner: "root"
+          group: "root"
+          mode: 0755
+
+    ################## Below moved to playbooks/roles/nginx/tasks/main.yml ###################
+    #- name: Create unpack directory for CV Nginx component
+    #  file:
+    #     path: /tmp/nginx_v_{{ cv_version }}
+    #     state: directory
+
+    #- name: Extract CV Nginx Authentication component archive
+    #  unarchive:
+    #      src: "/tmp/nginx_v_{{ cv_version }}.tar.gz"
+    #      dest: "/tmp/nginx_v_{{ cv_version }}"
+
+    #- name: Initialize install.properties with desired values
+    #  command: /tmp/nginx-init-install-properties.sh /tmp/nginx_v_{{ cv_version }}
+
+    #- name: Installs CV Nginx Authentication component
+    #  command: "/tmp/nginx_v_{{ cv_version }}/install.sh"
+
+    # post-installation setup
+    #- name: Corrects permissions on CV Nginx Auth directories/files
+    #  file:
+    #     dest: "/etc/nginx"
+    #     owner: "root"
+    #     group: "root"
+    #     mode: "u=rwX,g=rX,o=rX"
+    #     recurse: "yes"
+
+    #- name: Moves all configuration files
+    #  shell: "mv /etc/nginx/conf/* /etc/nginx"
+
+    # ensure cache is writable
+    #- name: Changes Nginx cache permission
+    #  file:
+    #     dest: "/var/cache"
+    #     owner: "root"
+    #     group: "root"
+    #     mode: "u=rwX,g=rX,o=rX"
+
+    #- name: Wipe off the downloaded aws-scripts-mon ZIP from /tmp
+    #  file:
+    #    path: /tmp/nginx_v_{{ cv_version }}
+    #    state: absent
+    ################## Below moved to playbooks/roles/nginx/tasks/main.yml ###################

@@ -1,0 +1,41 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  vars:
+    rpm_download_directory: '/root/install/rpm'
+    postgresql10_libs_rpm: 'postgresql10-libs-10.7-2PGDG.rhel7.x86_64.rpm'
+    postgresql10_rpm: 'postgresql10-10.7-2PGDG.rhel7.x86_64.rpm'
+    postgresql11_libs_rpm: 'postgresql11-libs-11.8-1PGDG.rhel7.x86_64.rpm'
+    postgresql11_rpm: 'postgresql11-11.8-1PGDG.rhel7.x86_64.rpm'
+    postgresql12_libs_rpm: 'postgresql12-libs-12.4-1PGDG.rhel7.x86_64.rpm'
+    postgresql12_rpm: 'postgresql12-12.4-1PGDG.rhel7.x86_64.rpm'
+  tasks:
+  - name: Download postgresql10 client rpm applicable for Amazon Linux 2
+    aws_s3:
+        bucket:  axiom-data-transfer
+        object: "{{ item.source }}"
+        mode: get
+        dest: "{{rpm_download_directory}}/{{ item.dest }}"
+    with_items:
+      - { source: "common/psql/{{postgresql10_libs_rpm}}", dest: "{{postgresql10_libs_rpm}}" }
+      - { source: "common/psql/{{postgresql10_rpm}}",      dest: "{{postgresql10_rpm}}"      }
+
+  - name: Download postgresql 11 client rpm applicable for Amazon Linux 2
+    aws_s3:
+        bucket:  axiom-data-transfer
+        object: "{{ item.source }}"
+        mode: get
+        dest: "{{rpm_download_directory}}/{{ item.dest }}"
+    with_items:
+      - { source: "common/psql/{{postgresql11_libs_rpm}}", dest: "{{postgresql11_libs_rpm}}" }
+      - { source: "common/psql/{{postgresql11_rpm}}",      dest: "{{postgresql11_rpm}}"      }
+
+  - name: Download postgresql 12 client rpm applicable for Amazon Linux 2
+    aws_s3:
+        bucket:  axiom-data-transfer
+        object: "{{ item.source }}"
+        mode: get
+        dest: "{{rpm_download_directory}}/{{ item.dest }}"
+    with_items:
+      - { source: "common/psql/{{postgresql12_libs_rpm}}", dest: "{{postgresql12_libs_rpm}}" }
+      - { source: "common/psql/{{postgresql12_rpm}}",      dest: "{{postgresql12_rpm}}"      }

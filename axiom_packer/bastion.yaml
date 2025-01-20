@@ -1,0 +1,57 @@
+---
+- hosts: all
+  become: true #for compatibility with packer
+  tasks:
+    ########## Packages and upgrades
+    - name: install filebeat GPG key
+      rpm_key:
+        key: https://packages.elastic.co/GPG-KEY-elasticsearch
+        state: present
+
+    - name: install elastic repo
+      yum_repository:
+        name: elastic-7.x
+        description: Elastic repository for 7.x packages
+        baseurl: https://artifacts.elastic.co/packages/7.x/yum
+        state: present
+
+    - name: install boto3
+      pip:
+          name: boto3
+          state: present
+
+    - name: install botocore for version compatibility with boto3
+      pip:
+          name: botocore
+          state: present
+
+    - name: remove ntp-client
+      yum:
+        name: ntp*
+        state: absent
+
+    - name: install epel7
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+
+    - name: install prerequisites
+      action: >
+          yum name={{ item }} state=latest update_cache=yes
+      with_items:
+        - amazon-cloudwatch-agent
+        - jq
+        - chrony
+        - nmap
+
+    - name: enable chronyd
+      service:
+        name: chronyd
+        enabled: yes
+        state: started  
+
+    - name: enable amazon-cloudwatch-agent
+      service:
+        name: amazon-cloudwatch-agent
+        enabled: yes
+        state: started

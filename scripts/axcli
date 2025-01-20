@@ -1,0 +1,376 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import json
+import sys
+import os
+import tempfile
+import random
+import string
+import pprint
+
+import boto3
+import botocore
+import click
+from jinja2 import Environment
+from datetime import datetime
+PATH_SCRIPT = os.path.dirname(os.path.abspath(__file__))
+PATH_CONFIG = os.path.join(PATH_SCRIPT, "../config")
+PATH_TF_TEMPLATES = os.path.join(PATH_SCRIPT, "../templates")
+PATH_INFRA_REPO = os.path.join(PATH_SCRIPT, "../")
+sys.path.append(PATH_CONFIG)
+sys.path.append(PATH_TF_TEMPLATES)
+import config_values
+
+
+def green(txt):
+    return click.secho(txt, fg='green')
+
+
+def red(txt):
+    return click.secho(txt, fg='red')
+
+
+def yellow(txt):
+    return click.secho(txt, fg='yellow')
+
+
+def render_template(tpl, kwargs):
+    return Environment().from_string(tpl).render(**kwargs)
+
+
+def write_template(path, content):
+    with open(path, "w") as f:
+        f.write(content)
+        f.flush()
+
+
+def json_to_string(obj):
+    return json.dumps(obj, indent=4, sort_keys=True, default=str)
+
+
+class AxiomConfig():
+    def config(self):
+        return config_values.tf_variables
+
+
+class AWS(object):
+    def __init__(self, config):
+        green("Executing on {0}-{1} env\n".format(config['customer'], config['env']))
+        boto3.setup_default_session(profile_name=config['customer']+"-"+config['env'])
+        self.region_from_env_cfg = config['aws_region']
+
+    clients = {}
+    regions = ['eu-west-1', 'ap-southeast-1', 'ap-southeast-2',
+               'eu-central-1', 'eu-west-2', 'us-east-1', 'us-east-2',
+               'us-west-1', 'us-west-2', 'ca-central-1', 'eu-central-1',
+               'eu-west-3', 'ap-northeast-1', 'ap-northeast-2', 'ap-south-1',
+               'sa-east-1']
+
+
+class EC2(AWS):
+    def __init__(self, config):
+        super(EBS, self).__init__(config)
+        for region in self.regions:
+            self.clients[region] = boto3.client('ec2', region_name=region)
+
+    def reboot_instance(self, instance_id):
+        print(self.clients[region].delete_volume(VolumeId=vol_id))
+
+
+class EBS(AWS):
+    def __init__(self, config):
+        super(EBS, self).__init__(config)
+        for region in self.regions:
+            self.clients[region] = boto3.client('ec2', region_name=region)
+
+    def delete(self, region, vol_id):
+        print(self.clients[region].delete_volume(VolumeId=vol_id))
+
+    def list_unused(self):
+        result = {}
+        for region, client in list(self.clients.items()):
+            result[region] = client.describe_volumes(Filters=[
+                {
+                    'Name': 'status',
+                    'Values': [
+                        'available',
+                    ]
+                },
+            ])
+            self.__print_volumes(region, result[region])
+
+    def __print_volumes(self, region, volumes):
+        yellow(("--- {0} --- ".format(region)))
+        for volume in volumes['Volumes']:
+            print(volume['VolumeId'])
+
+
+class SSM(AWS):
+    def __init__(self, config):
+        super(SSM, self).__init__(config)
+        for region in self.regions:
+            self.clients[region] = boto3.client('ssm', region_name=region)
+
+    def put_parameter(self, parameter_data, region):
+        try:
+            if 'kms_key_id' in parameter_data:
+                response = self.clients[region].put_parameter(
+                    Name=parameter_data['name'],
+                    Description=parameter_data['description'],
+                    Value=parameter_data['value'],
+                    Type=parameter_data['type'],
+                    KeyId=parameter_data['kms_key_id'],
+                    Overwrite=parameter_data['overwrite']
+                )
+            else:
+                response = self.clients[region].put_parameter(
+                    Name=parameter_data['name'],
+                    Description=parameter_data['description'],
+                    Value=parameter_data['value'],
+                    Type=parameter_data['type'],
+                    Overwrite=parameter_data['overwrite']
+                )
+            green("Paramter has been added")
+            return True
+        except botocore.exceptions.ClientError as e:
+            red("Failed adding requested parameter.")
+            print(e)
+            return False
+        except botocore.exceptions.EndpointConnectionError:
+            red("Couldn't connect to SSM APIs.")
+            return False
+
+    def delete_parameter(self, paramname, region):
+        try:
+            response = self.clients[region].delete_parameter(
+                Name=paramname
+            )
+            return True
+        except botocore.exceptions.ClientError as e:
+            red("Failed to remove parameter {0}".format(paramname))
+            print(e)
+            return False
+        except botocore.exceptions.EndpointConnectionError:
+            red("Couldn't connect to SSM APIs.")
+            return False
+
+
+class RDS(AWS):
+    def __init__(self, config):
+        super(RDS, self).__init__(config)
+        for region in self.regions:
+            self.clients[region] = boto3.client('rds', region_name=region)
+
+    def describe_snapshot(self, db_snapshot_id):
+        client = self.clients[self.region_from_env_cfg]
+        try:
+            response = client.describe_db_snapshot_attributes(
+                DBSnapshotIdentifier=db_snapshot_id
+            )
+            return response
+        except botocore.exceptions.ClientError as e:
+            red("Couldn't get DB snapshot.")
+            print(e)
+            return False
+
+    def describe_snapshot_id(self, db_snapshot_id):
+        client = self.clients[self.region_from_env_cfg]
+        try:
+            response = client.describe_db_snapshots(
+                DBSnapshotIdentifier=db_snapshot_id
+            )
+            return response
+        except botocore.exceptions.ClientError as e:
+            red("Couldn't get DB snapshot.")
+            print(e)
+            return False
+
+    def list_snapshots(self, db_id):
+        client = self.clients[self.region_from_env_cfg]
+        try:
+            response = client.describe_db_snapshots(
+                DBInstanceIdentifier=db_id
+            )
+            yellow("All DB snapshots:")
+            yellow(json_to_string(response))
+            return response
+        except botocore.exceptions.ClientError:
+            return False
+
+
+class KMS(AWS):
+    def __init__(self, config):
+        super(KMS, self).__init__(config)
+        for region in self.regions:
+            self.clients[region] = boto3.client('kms', region_name=region)
+
+    def list_keys_allregions(self, **kwargs):
+        for region in self.regions:
+            yellow("Printing KMS keys for region {0}".format(region))
+            self.list_keys(region, **kwargs)
+
+    def list_keys(self, region, sort_by_date=True, include_aws_provided=False):
+        kms_keys = []
+        kms = self.clients[region]
+        all_keys = kms.list_keys(Limit=1000)
+        green("Be patient.. Collecting information about all KMS keys.."
+              "Depending of number of KMS keys it might take me a while.\n")
+
+        for kms_key in all_keys['Keys']:
+            desc_info = kms.describe_key(KeyId=kms_key['KeyId'])
+            desc_info['KeyMetadata']['CreationDate'] = str(desc_info['KeyMetadata']['CreationDate'])
+            desc_info['KeyId'] = kms_key['KeyId']
+            desc_info['KeyArn'] = kms_key['KeyArn']
+            kms_keys.append(desc_info)
+
+        if sort_by_date:
+            kms_keys.sort(lambda x, y: cmp(x['KeyMetadata']
+                                           ['CreationDate'], y['KeyMetadata']['CreationDate']))
+
+        # by default exclude AWS/RDS AWS/EBS etc.. default kms keys
+        if not include_aws_provided:
+            kms_keys = [key for key in kms_keys if key['KeyMetadata']['KeyManager'] != 'AWS']
+
+        print("{0:36} | {1:15} | {2:32} | {3:8} | {4}".format(
+            "KEYID", "STATE", "CREATIONDATE", "MANAGER", "DESCRIPTION"))
+        print("-" * 116)
+        for key in kms_keys:
+            print("{0} | {1:15} | {2:32} | {3:8} | {4:30}".format(key['KeyId'],
+                                                                  key['KeyMetadata']['KeyState'],
+                                                                  key['KeyMetadata']['CreationDate'],
+                                                                  key['KeyMetadata']['KeyManager'],
+                                                                  key['KeyMetadata']['Description']))
+
+
+@click.group()
+def cli():
+    """Axiom toolkit"""
+
+
+@cli.command()
+def list_unused_ebs():
+    ebs = EBS(AxiomConfig().config())
+    ebs.list_unused()
+
+
+@click.option('--region', '-r', help='Region', required=True)
+@click.option('--volume_id', '-i', help='Volume ID', required=True)
+@cli.command()
+def delete_ebs(region, volume_id):
+    ebs = EBS(AxiomConfig().config())
+    ebs.delete(region, volume_id)
+
+
+@cli.command()
+@click.option('--region', '-r', help='Region', required=True)
+@click.option('--include_aws_provided', help='List also AWS managed keys (AWS/ebs for example).', is_flag=True, default=False)
+def kms_list_keys(region, include_aws_provided):
+    kms = KMS(AxiomConfig().config())
+    kms.list_keys(region, include_aws_provided=include_aws_provided)
+
+
+@cli.command()
+@click.option('--include_aws_provided', help='List also AWS managed keys (AWS/ebs for example).', is_flag=True, default=False)
+def kms_list_keys_all_regions(include_aws_provided):
+    kms = KMS(AxiomConfig().config())
+    kms.list_keys_allregions(include_aws_provided=include_aws_provided)
+
+
+@cli.command()
+def rds_list_snapshots():
+    rds = RDS(AxiomConfig().config())
+    rds.list_snapshots()
+
+
+@cli.command()
+@click.option('--db_id', '-t', help='The database identifier. Example: database-c1234-np', required=True)
+@click.option('--recovery_point', '-t', help='Recovery point to restore to. Format: dd-MMM-yyyy hh:mm:ss', required=True)
+def rds_find_last_snapshot(db_id, recovery_point):
+    datetime_object = datetime.strptime(recovery_point, '%d-%b-%Y %H:%M:%S')
+    rds = RDS(AxiomConfig().config())
+    snapshots = rds.list_snapshots(db_id)['DBSnapshots']
+
+    date_list = list([snapshot['SnapshotCreateTime'] for snapshot in snapshots])
+    date_list = [d for d in date_list if d.replace(tzinfo=None) <= datetime_object]
+    if len(date_list) == 0:
+        red("No snapshot can be found earlier than {0}.".format(recovery_point))
+        exit(1)
+
+    closest = sorted(date_list, key=lambda d: (datetime_object - d.replace(tzinfo=None)))[0]
+    result = [snapshot for snapshot in snapshots if snapshot['SnapshotCreateTime'] == closest][0]
+    green("Snapshot found: \n{0}".format(pprint.pformat(result)))
+    green("Created at: {0}\n".format(result['SnapshotCreateTime'].strftime('%d-%b-%Y %H:%M:%S %Z %z')))
+    write_template("temp/db_snapshot.json", json_to_string(result))
+
+
+@cli.command()
+@click.option('--db_snapshot_id', '-t', help='The snapshot identifier.', required=True)
+def rds_validate_snapshot_id(db_snapshot_id):
+    rds = RDS(AxiomConfig().config())
+    result = rds.describe_snapshot(db_snapshot_id)
+    if result == False:
+        exit(1)
+
+    green("Snapshot found: \n{0}".format(pprint.pformat(result)))
+    current_snaphot_id = result['DBSnapshotAttributesResult']['DBSnapshotIdentifier']
+    current_snaphot_description = rds.describe_snapshot_id(current_snaphot_id)
+    green("Created at: {0}\n".format(current_snaphot_description['DBSnapshots'][0]['SnapshotCreateTime'].strftime('%d-%b-%Y %H:%M:%S %Z %z')))
+    write_template("temp/db_snapshot.json", json_to_string(current_snaphot_description['DBSnapshots'][0]))
+
+
+@cli.command()
+@click.option('--kms_key_id', help='ID of KMS key to use to encrypt parameter.', required=True)
+@click.option('--paramname', help='Name of the parameter to store password under', required=True)
+def ssm_generate_password(kms_key_id, paramname):
+    cfg = AxiomConfig().config()
+    ssm = SSM(cfg)
+
+    # gen password
+    chars = string.ascii_uppercase + string.ascii_lowercase + string.digits
+    size = 30
+    password = ''.join(random.choice(chars) for x in range(size))
+
+    parameter_data = {
+        "name": paramname,
+        "description": "{0}-{1} password".format(cfg['customer'], cfg['env']),
+        "value": password,
+        "type": 'SecureString',
+        "kms_key_id": kms_key_id,
+        "overwrite": True
+    }
+    if not ssm.put_parameter(parameter_data, cfg['aws_region']):
+        sys.exit(1)
+    sys.exit(0)
+
+
+@cli.command()
+@click.option('--paramname', help='Name of the parameter', required=True)
+@click.option('--paramvalue', help='Value of the parameter', required=True)
+def ssm_create_parameter(paramname, paramvalue):
+    cfg = AxiomConfig().config()
+    ssm = SSM(cfg)
+
+    parameter_data = {
+        "name": paramname,
+        "description": "{0}-{1}".format(cfg['customer'], cfg['env']),
+        "value": paramvalue,
+        "type": 'String',        
+        "overwrite": True
+    }
+    if not ssm.put_parameter(parameter_data, cfg['aws_region']):
+        sys.exit(1)
+    sys.exit(0)
+
+
+@cli.command()
+@click.option('--paramname', help='Name of parameter under which password is stored', required=True)
+def ssm_delete_parameter(paramname):
+    cfg = AxiomConfig().config()
+    ssm = SSM(cfg)
+    if not ssm.delete_parameter(paramname, cfg['aws_region']):
+        sys.exit(1)
+    sys.exit(0)
+
+
+if __name__ == '__main__':
+    cli()
